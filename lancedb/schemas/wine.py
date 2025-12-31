@@ -2,8 +2,6 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from lancedb.pydantic import LanceModel, Vector
-
 
 class Wine(BaseModel):
     model_config = ConfigDict(
@@ -56,7 +54,7 @@ class Wine(BaseModel):
 
     @model_validator(mode="before")
     def _add_to_vectorize_fields(cls, values):
-        "Add a field to_vectorize that will be used to create sentence embeddings"
+        "Add a field to_vectorize that will be used for full-text search"
         variety = values.get("variety", "")
         title = values.get("title", "")
         description = values.get("description", "")
@@ -67,7 +65,7 @@ class Wine(BaseModel):
 
 class LanceModelWine(BaseModel):
     """
-    Pydantic model for LanceDB, with a vector field added for sentence embeddings
+    Pydantic model for LanceDB (FTS only, no vector field)
     """
 
     id: int
@@ -85,10 +83,9 @@ class LanceModelWine(BaseModel):
     taster_name: Optional[str]
     taster_twitter_handle: Optional[str]
     to_vectorize: str
-    vector: Vector(384)
 
 
-class SearchResult(LanceModel):
+class SearchResult(BaseModel):
     "Model to return search results"
 
     model_config = ConfigDict(

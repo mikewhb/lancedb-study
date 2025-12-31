@@ -7,4 +7,3 @@ class Settings(BaseSettings):
         extra="allow",
     )
     lancedb_dir: str
-    embedding_model_checkpoint: str

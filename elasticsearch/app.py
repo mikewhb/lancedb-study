@@ -1,5 +1,5 @@
 """
-FastAPI app to serve search endpoints
+FastAPI app to serve FTS search endpoints (no vector search)
 """
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
@@ -8,7 +8,6 @@ from functools import lru_cache
 from config import Settings
 from fastapi import FastAPI, HTTPException, Query, Request
 from schemas.wine import SearchResult
-from sentence_transformers import SentenceTransformer
 
 from elasticsearch import AsyncElasticsearch
 
@@ -23,7 +22,6 @@ def get_settings():
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Async context manager for Elasticsearch connection."""
     settings = get_settings()
-    app.model = SentenceTransformer(settings.embedding_model_checkpoint)
 
     username = settings.elastic_user
     password = settings.elastic_password
@@ -45,11 +43,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 
 app = FastAPI(
-    title="REST API for wine reviews on LanceDB",
+    title="REST API for wine reviews on Elasticsearch (FTS only)",
     description=(
-        "Query from a LanceDB database of 130k wine reviews from the Wine Enthusiast magazine"
+        "Query from an Elasticsearch database of 130k wine reviews from the Wine Enthusiast magazine using Full-Text Search"
     ),
-    version="0.1.0",
+    version="0.2.0",
     lifespan=lifespan,
 )
 
@@ -59,7 +57,7 @@ app = FastAPI(
 @app.get("/", include_in_schema=False)
 async def root():
     return {
-        "message": "REST API for querying LanceDB database of 130k wine reviews from the Wine Enthusiast magazine"
+        "message": "REST API for querying Elasticsearch database of 130k wine reviews using Full-Text Search"
     }
 
 
@@ -77,32 +75,7 @@ async def _fts_search(request: Request, query: str) -> list[SearchResult] | None
                 }
             }
         },
-        _source=["id", "title", "description", "country", "variety", "price", "points"],
-    )
-    result = response["hits"].get("hits")
-    if result:
-        return [item["_source"] for item in result]
-    else:
-        return None
-
-
-async def _vector_search(request: Request, query: str) -> list[SearchResult] | None:
-    query_vector = request.app.model.encode(query.lower()).tolist()
-    response = await request.app.client.search(
-        index="wines",
-        size=10,
-        query={
-            "script_score": {
-                "query": {"match_all": {}},
-                "script": {
-                    "source": "cosineSimilarity(params.queryVector, 'vector') + 1.0",
-                    "params": {
-                        "queryVector": query_vector,
-                    },
-                },
-            }
-        },
-        _source=["id", "title", "description", "country", "variety", "price", "points"],
+        source=["id", "title", "description", "country", "variety", "price", "points"],
     )
     result = response["hits"].get("hits")
     if result:
@@ -127,26 +100,6 @@ async def fts_search(
 ) -> list[SearchResult] | None:
     result = await _fts_search(request, query)
 
-    if not result:
-        raise HTTPException(
-            status_code=404,
-            detail=f"No wine with the provided terms '{query}' found in database - please try again",
-        )
-    return result
-
-
-@app.get(
-    "/vector_search",
-    response_model=list[SearchResult],
-    response_description="Search for wines via semantically similar terms",
-)
-async def vector_search(
-    request: Request,
-    query: str = Query(
-        description="Specify terms to search for in the variety, title and description"
-    ),
-) -> list[SearchResult] | None:
-    result = await _vector_search(request, query)
     if not result:
         raise HTTPException(
             status_code=404,

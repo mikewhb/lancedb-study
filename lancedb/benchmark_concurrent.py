@@ -1,6 +1,6 @@
 """
-Run this script to benchmark the concurrent search performance of the FTS and vector search
-via REST API endpoints.
+Run this script to benchmark the concurrent search performance of the FTS search
+via REST API endpoints (no vector search).
 """
 import argparse
 import asyncio
@@ -42,12 +42,8 @@ async def async_get(
 
 
 async def main():
-    if args.search == "fts":
-        URL = "http://localhost:8000/fts_search"
-        queries = get_query_terms("keyword_terms.txt")
-    else:
-        URL = "http://localhost:8000/vector_search"
-        queries = get_query_terms("vector_terms.txt")
+    URL = "http://localhost:8000/fts_search"
+    queries = get_query_terms("keyword_terms.txt")
 
     random_choice_queries = [random.choice(queries) for _ in range(LIMIT)]
 
@@ -58,7 +54,7 @@ async def main():
                 for query in random_choice_queries
             ]
             res = await asyncio.gather(*tasks)
-            print(f"Finished retrieving {len(res)} {args.search} search query results")
+            print(f"Finished retrieving {len(res)} FTS search query results")
 
 
 if __name__ == "__main__":
@@ -66,14 +62,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed", type=int, default=37, help="Seed for random number generator")
     parser.add_argument("--limit", "-l", type=int, default=10, help="Number of search terms to randomly generate")
-    parser.add_argument("--search", type=str, default="fts", help="Specify whether to do FTS or vector search")
     args = parser.parse_args()
     # fmt: on
 
     LIMIT = args.limit
     SEED = args.seed
-
-    # Assert that the search type is only one of "fts" or "vector"
-    assert args.search in ["fts", "vector"], "Please specify a valid search type: 'fts' or 'vector'"
 
     asyncio.run(main())

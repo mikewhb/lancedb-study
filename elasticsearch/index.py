@@ -9,7 +9,6 @@ from config import Settings
 from dotenv import load_dotenv
 from rich import progress
 from schemas.wine import Wine
-from sentence_transformers import SentenceTransformer
 
 from elasticsearch import Elasticsearch, helpers
 
@@ -101,17 +100,14 @@ def create_index(client: Elasticsearch, index: str, mappings_path: Path) -> None
         print(f"Found index {index} in db, skipping index creation...\n")
 
 
-def add_vectors_to_index(data_chunk: tuple[JsonBlob, ...], index: str) -> None:
+def add_data_to_index(data_chunk: tuple[JsonBlob, ...], index: str) -> None:
+    """Add data to Elasticsearch index (FTS only, no vector)"""
     elastic_client = get_elastic_client(get_settings())
     assert elastic_client.ping()
-    # Load a sentence transformer model for semantic similarity from a specified checkpoint
-    model_id = get_settings().embedding_model_checkpoint
-    assert model_id, "Invalid embedding model checkpoint specified in .env file"
-    MODEL = SentenceTransformer(model_id)
 
-    to_vectorize = [text.pop("to_vectorize") for text in data_chunk]
-    vectors = [list(MODEL.encode(sentence.lower())) for sentence in to_vectorize]
-    data_batch = [{**d, "vector": vector} for d, vector in zip(data_chunk, vectors)]
+    # Remove to_vectorize field before indexing (not needed for ES FTS)
+    data_batch = [{k: v for k, v in d.items() if k != "to_vectorize"} for d in data_chunk]
+    
     for success, info in helpers.streaming_bulk(
         elastic_client,
         data_batch,
@@ -143,10 +139,10 @@ def main(data: list[JsonBlob]) -> None:
         progress.TimeElapsedColumn(),
     ) as prog:
         overall_progress_task = prog.add_task(
-            "Vectorizing the required data...", total=len(validated_data) // CHUNKSIZE
+            "Indexing data for FTS...", total=len(validated_data) // CHUNKSIZE
         )
         for chunk in chunked_data:
-            add_vectors_to_index(chunk, INDEX_ALIAS)
+            add_data_to_index(chunk, INDEX_ALIAS)
             prog.update(overall_progress_task, advance=1)
 
     # Close Elasticsearch client
