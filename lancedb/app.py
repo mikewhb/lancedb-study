@@ -58,7 +58,7 @@ async def root():
 def _fts_search(request: Request, terms: str) -> list[SearchResult] | None:
     # In FTS, we limit to a max of 10K points to be more in line with Elasticsearch
     search_result = (
-        request.app.table.search(terms, vector_column_name="description")
+        request.app.table.search(terms, query_type="fts")
         .select(["id", "title", "description", "country", "variety", "price", "points"])
         .limit(10)
     ).to_pydantic(SearchResult)

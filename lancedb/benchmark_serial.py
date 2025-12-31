@@ -29,7 +29,7 @@ def get_query_terms(filename: str) -> list[str]:
 
 def fts_search(table: Table, query: str) -> list[SearchResult] | None:
     search_result = (
-        table.search(query, vector_column_name="description")
+        table.search(query, query_type="fts")
         .select(["id", "title", "description", "country", "variety", "price", "points"])
         .limit(10)
     ).to_pydantic(SearchResult)
